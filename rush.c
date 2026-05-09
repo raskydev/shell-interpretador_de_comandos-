@@ -5,7 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-int main(void){
+int main(void)
+{
     char input[1024];
 
     while (1){
@@ -16,8 +17,7 @@ int main(void){
         // remove o \n do final
         input[strcspn(input, "\n")] = '\0';
 
-        if (strcmp(input, "exit") == 0)
-        {
+        if (strcmp(input, "exit") == 0){
 
             break;
         }
@@ -25,30 +25,39 @@ int main(void){
         int argc = 0;
         char *saveptr1;
         char *segmento = strtok_r(input, "|", &saveptr1);
-        
-        //separa segmentos por "|"
+
+        // separa segmentos por "|"
         while (segmento != NULL){
-            
-            printf("segmento: '%s'\n", segmento);
+
             char *saveptr2;
             char *token = strtok_r(segmento, " ", &saveptr2);
-            
+            char *output_file = NULL;
+            char *input_file = NULL;
+
             // quebra o programa em tokens por espaço
             while (token != NULL){
-    
-                argv[argc] = token;
-                printf("token: %s\n", token);
-                argc++;
-                token = strtok_r(NULL, " ", &saveptr2);
+                
+                if (strcmp(token, ">") == 0){
+                    output_file = strtok_r(NULL, " ", &saveptr2);
+                }
+                else if (strcmp(token, "<") == 0)
+                {
+                    input_file = strtok_r(NULL, " ", &saveptr2);
+                }
+                else
+                {
+                    argv[argc] = token;
+                    argc++;
+                }
 
+                token = strtok_r(NULL, " ", &saveptr2); // avança para o ultimo
             }
 
             segmento = strtok_r(NULL, "|", &saveptr1);
         }
-       
+
         argv[argc] = NULL;
     }
 
-
-return 0;
+    return 0;
 }
