@@ -14,8 +14,14 @@ int main(void)
         // prompt
         printf("$");
         fgets(input, 1024, stdin);
+
         // remove o \n do final
         input[strcspn(input, "\n")] = '\0';
+
+        //verifica se o imput esta vazio
+        if (strcmp(input, "") == 0){
+            continue;
+        }
 
         if (strcmp(input, "exit") == 0){
 
@@ -36,7 +42,8 @@ int main(void)
 
             // quebra o programa em tokens por espaço
             while (token != NULL){
-                
+
+                //detecção de < e >
                 if (strcmp(token, ">") == 0){
                     output_file = strtok_r(NULL, " ", &saveptr2);
                 }
@@ -45,8 +52,8 @@ int main(void)
                     input_file = strtok_r(NULL, " ", &saveptr2);
                 }
                 else
-                {
-                    argv[argc] = token;
+                {  
+                    argv[argc] = token; 
                     argc++;
                 }
 
