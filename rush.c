@@ -4,6 +4,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 
 // henrrique — adicione os includes necessários aq:
 
@@ -76,6 +79,39 @@ int main(void)
             }
 
             argv[argc] = NULL;
+
+            pid_t pid = fork();
+
+            if (pid < 0) { //erro no fork
+		        fprintf(stderr, "Falha na realizacao do fork()\n");
+		        return 1;
+	        }
+
+            if(pid==0){
+                if(input_file != NULL){
+                   int fd_in = open(input_file, O_RDONLY); //lê do arquivo input
+                   dup2(fd_in, STDIN_FILENO);
+                   //quando o usuário escrever ls > coisa.txt o objetivo é ler o que tá em ls e escrever em coisa.txt
+                   //o dup2 vai garantir que a leitura seja escrita no arquivo e não printada no terminal
+                   close(fd_in);
+                }
+                
+                if(output_file != NULL){
+                    int fd_out = open(output_file,O_WRONLY | O_CREAT | O_TRUNC,0644); //cria o arquivo file do tipo somente escrita, zera
+                                                                                      //o conteúdo do arquivo ao abrir e pede permissão
+                    dup2(fd_out, STDOUT_FILENO);
+                    close(fd_out);
+                }
+                execvp(argv[0], argv);
+                perror("execvp");
+                exit(1);
+            }
+
+            if(pid>0){
+                waitpid(pid,NULL,0);
+                
+            }
+
             /*henrique — execute o comando aqui:
                 pid_t pid = fork()
                 se pid == 0 (filho):
