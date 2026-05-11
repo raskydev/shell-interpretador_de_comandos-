@@ -4,18 +4,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <fcntl.h>
 
-
-// henrrique — adicione os includes necessários aq:
+#define Read_Saida  0
+#define Write_Saida 1
+// variavel para controle dos pipes
 
 int main(void)
 {
     char input[1024];
 
-    while (1)
-    {
+    while (1){
 
         // prompt
         printf("$");
@@ -24,53 +26,57 @@ int main(void)
         // remove o \n do final
         input[strcspn(input, "\n")] = '\0';
 
-        // verifica se o imput esta vazio
-        if (strcmp(input, "") == 0)
-        {
+        //verifica se o imput esta vazio
+        if (strcmp(input, "") == 0){
             continue;
         }
 
-        if (strcmp(input, "exit") == 0)
-        {
-
+        if (strcmp(input, "exit") == 0){
             break;
         }
+
+        //conta quantos "|" existem no input
+        //precisa ser antes do strtok_r pois ele coloca \0 no lugar do |
+        int contador_pipe = 0;
+        for (int i = 0; input[i] != '\0'; i++){
+            if (input[i] == '|')
+                contador_pipe++;
+        }
+
+        //cria um array de pipes e inicializa cada par
+        int pipes[contador_pipe][2];
+        for (int i = 0; i < contador_pipe; i++){
+            if (pipe(pipes[i]) == -1){
+                perror("pipe");
+                return 1;
+            }
+        }
+
         char *argv[64];
-        int argc = 0;
         char *saveptr1;
         char *segmento = strtok_r(input, "|", &saveptr1);
-
-        /*conte quantos "|" existem no input
-        //crie um array de pipes: int pipes[n_pipes][2]
-        //chame pipe() para cada par*/
+        int localizador = 0; //variavel para saber quais pares de comunicação de pipes
 
         // separa segmentos por "|"
-        while (segmento != NULL)
-        {
+        while (segmento != NULL){
 
+            int argc = 0; //zerar a cada iteração
             char *saveptr2;
             char *token = strtok_r(segmento, " ", &saveptr2);
             char *output_file = NULL;
             char *input_file = NULL;
 
             // quebra o programa em tokens por espaço
-            while (token != NULL)
-            {
+            while (token != NULL){
 
-                // detecção de < e >
-                if (strcmp(token, ">") == 0)
-                {
-
-                    // stdout vai para este arquivo via open() + dup2()
+                //detecção de < e >
+                if (strcmp(token, ">") == 0){
                     output_file = strtok_r(NULL, " ", &saveptr2);
                 }
-                else if (strcmp(token, "<") == 0)
-                {
-                    // stdin vem deste arquivo via open() + dup2()
+                else if (strcmp(token, "<") == 0){
                     input_file = strtok_r(NULL, " ", &saveptr2);
                 }
-                else
-                {
+                else{
                     argv[argc] = token;
                     argc++;
                 }
@@ -82,57 +88,62 @@ int main(void)
 
             pid_t pid = fork();
 
-            if (pid < 0) { //erro no fork
-		        fprintf(stderr, "Falha na realizacao do fork()\n");
-		        return 1;
-	        }
+            if (pid < 0){ //erro no fork
+                fprintf(stderr, "Falha na realizacao do fork()\n");
+                return 1;
+            }
 
-            if(pid==0){
-                if(input_file != NULL){
-                   int fd_in = open(input_file, O_RDONLY); //lê do arquivo input
-                   dup2(fd_in, STDIN_FILENO);
-                   //quando o usuário escrever ls > coisa.txt o objetivo é ler o que tá em ls e escrever em coisa.txt
-                   //o dup2 vai garantir que a leitura seja escrita no arquivo e não printada no terminal
-                   close(fd_in);
+            if (pid == 0){ //processo filho
+
+                //conecta stdin/stdout aos pipes corretos
+                if (contador_pipe > 0){
+                    if (localizador == 0) //caso seja o primeiro comando
+                        dup2(pipes[localizador][Write_Saida], STDOUT_FILENO);
+                    else if (localizador < contador_pipe){ //caso seja os comandos do meio
+                        dup2(pipes[localizador - 1][Read_Saida], STDIN_FILENO);
+                        dup2(pipes[localizador][Write_Saida], STDOUT_FILENO);
+                    }
+                    else //caso seja o ultimo comando
+                        dup2(pipes[localizador - 1][Read_Saida], STDIN_FILENO);
                 }
-                
-                if(output_file != NULL){
-                    int fd_out = open(output_file,O_WRONLY | O_CREAT | O_TRUNC,0644); //cria o arquivo file do tipo somente escrita, zera
-                                                                                      //o conteúdo do arquivo ao abrir e pede permissão
+
+                if (input_file != NULL){
+                    int fd_in = open(input_file, O_RDONLY);
+                    //o dup2 vai garantir que a leitura venha do arquivo e não do terminal
+                    dup2(fd_in, STDIN_FILENO);
+                    close(fd_in);
+                }
+
+                if (output_file != NULL){
+                    int fd_out = open(output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                    //o dup2 vai garantir que a escrita vá para o arquivo e não para o terminal
                     dup2(fd_out, STDOUT_FILENO);
                     close(fd_out);
                 }
+
+                //fecha os pipes no filho antes de executar
+                for (int i = 0; i < contador_pipe; i++){
+                    close(pipes[i][Read_Saida]);
+                    close(pipes[i][Write_Saida]);
+                }
+
                 execvp(argv[0], argv);
                 perror("execvp");
                 exit(1);
             }
 
-            if(pid>0){
-                waitpid(pid,NULL,0);
-                
-            }
+            if (pid > 0) //processo pai espera o filho terminar
+                waitpid(pid, NULL, 0);
 
-            /*henrique — execute o comando aqui:
-                pid_t pid = fork()
-                se pid == 0 (filho):
-                se input_file != NULL  → open() + dup2() para stdin
-                se output_file != NULL → open() + dup2() para stdout
-                execvp(argv[0], argv)
-                se pid > 0 (pai):
-                wait() ou waitpid()*/
-
-                //////
-
-             /*kaio — dentro do filho, antes do execvp:
-                 dup2() para conectar stdin/stdout aos pipes corretos
-               no pai:
-                 feche as pontas do pipe que o pai não usa*/ 
-
+            localizador++;
             segmento = strtok_r(NULL, "|", &saveptr1);
         }
-        
-        //kaio— após o while, feche todos os pipes abertos
 
+        //fecha todos os pipes abertos
+        for (int i = 0; i < contador_pipe; i++){
+            close(pipes[i][Read_Saida]);
+            close(pipes[i][Write_Saida]);
+        }
     }
 
     return 0;
