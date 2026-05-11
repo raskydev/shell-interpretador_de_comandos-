@@ -72,7 +72,7 @@ int main(void)
         // separa segmentos por "|"
         while (segmento != NULL)
         {
-            int argc = 0; //zerar a cada interaçao
+            int argc = 0; //zerar a cada interaçao 
             char *saveptr2;
             char *token = strtok_r(segmento, " ", &saveptr2);
             char *output_file = NULL;
@@ -135,9 +135,9 @@ int main(void)
                     }
                     
                     //caso seja o ultimo comando
-                    else if (localizador == contador_pipe)
+                    else
                     {
-                        dup(pipes[localizador - 1][Read_Saida], STDIN_FILENO);
+                        dup2(pipes[localizador - 1][Read_Saida], STDIN_FILENO);
                     }
                     
                 }
